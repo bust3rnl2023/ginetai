@@ -11,24 +11,24 @@ RUN npm install
 # Step 4: Copy the rest of your app's source code
 COPY . .
 
-# Step 5: Inject allowedHosts configuration into vite.config.js dynamically
-RUN node -e " \
-const fs = require('fs'); \
-if (fs.existsSync('vite.config.js')) { \
-  let content = fs.readFileSync('vite.config.js', 'utf8'); \
-  if (content.includes('server:')) { \
-    content = content.replace('server:', 'server: { allowedHosts: true, '); \
-  } else if (content.includes('defineConfig({')) { \
-    content = content.replace('defineConfig({', 'defineConfig({\n  server: { allowedHosts: true },'); \
+# Step 5: Force overwrite vite.config.js to allow all hostnames
+RUN echo "import { defineConfig } from 'vite'; \
+import react from '@vitejs/plugin-react'; \
+export default defineConfig({ \
+  plugins: [react()], \
+  server: { \
+    host: '0.0.0.0', \
+    port: 3000, \
+    allowedHosts: true \
   } \
-  fs.writeFileSync('vite.config.js', content); \
-}"
+});" > vite.config.js
 
 # Step 6: Expose the Vite port
 EXPOSE 3000
 
-# Step 7: Force the app to run on host 0.0.0.0
+# Step 7: Force environment variables
 ENV HOST=0.0.0.0
+ENV PORT=3000
 
 # Step 8: Start the application
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["npm", "run", "dev"]
