@@ -11,12 +11,24 @@ RUN npm install
 # Step 4: Copy the rest of your app's source code
 COPY . .
 
-# Step 5: Expose the common development port (Vite uses 5173, Next.js uses 3000)
-# We'll expose 5173 since it's the standard for modern Google AI Studio frontend apps
-EXPOSE 5173
+# Step 5: Inject allowedHosts configuration into vite.config.js dynamically
+RUN node -e " \
+const fs = require('fs'); \
+if (fs.existsSync('vite.config.js')) { \
+  let content = fs.readFileSync('vite.config.js', 'utf8'); \
+  if (content.includes('server:')) { \
+    content = content.replace('server:', 'server: { allowedHosts: true, '); \
+  } else if (content.includes('defineConfig({')) { \
+    content = content.replace('defineConfig({', 'defineConfig({\n  server: { allowedHosts: true },'); \
+  } \
+  fs.writeFileSync('vite.config.js', content); \
+}"
 
-# Step 6: Force the app to run on host 0.0.0.0 so Easypanel can access it
+# Step 6: Expose the Vite port
+EXPOSE 3000
+
+# Step 7: Force the app to run on host 0.0.0.0
 ENV HOST=0.0.0.0
 
-# Step 7: Start the application using the dev script
+# Step 8: Start the application
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
