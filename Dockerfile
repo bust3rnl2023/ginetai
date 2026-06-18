@@ -1,34 +1,39 @@
-# Step 1: Use the official Node.js runtime environment
-FROM node:20-alpine
-
-# Step 2: Create and set the application directory
+# --- Step 1: Build the application ---
+FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
 
-# Step 3: Copy package files and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Step 4: Copy the rest of your app's source code
 COPY . .
 
-# Step 5: Force overwrite vite.config.js to allow all hostnames
-RUN echo "import { defineConfig } from 'vite'; \
-import react from '@vitejs/plugin-react'; \
-export default defineConfig({ \
-  plugins: [react()], \
-  server: { \
-    host: '0.0.0.0', \
-    port: 3000, \
-    allowedHosts: true \
-  } \
-});" > vite.config.js
+# Pass the API key during build time so Vite can bake it into the frontend if needed
+ARG GEMINI_API_KEY
+ENV VITE_GEMINI_API_KEY=$GEMINI_API_KEY
+ENV GEMINI_API_KEY=$GEMINI_API_KEY
 
-# Step 6: Expose the Vite port
-EXPOSE 3000
+# Build the static production files (generates a 'dist' or 'build' folder)
+RUN npm run build
 
-# Step 7: Force environment variables
-ENV HOST=0.0.0.0
-ENV PORT=3000
+# --- Step 2: Serve with Nginx ---
+FROM nginx:alpine
 
-# Step 8: Start the application
-CMD ["npm", "run", "dev"]
+# Clean default Nginx files
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy the built files from the builder stage
+# (Vite outputs to 'dist'. If your project uses 'build', change 'dist' to 'build')
+COPY --from=builder /usr/src/app/dist /usr/share/nginx/html
+
+# Failsafe routing config for single-page apps
+RUN echo 'server { \
+    listen 80; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
